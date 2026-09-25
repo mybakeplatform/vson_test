@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MyBake Platform Test Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>MyBake Platform Test Console</h1>
+      <div id="session-bar" class="session-bar">
+        <span id="session-status">Not signed in</span>
+        <select id="bakery-select" hidden></select>
+        <span id="rt-indicator" class="pill pill-off">realtime: off</span>
+        <button id="logout" hidden>Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="login-panel" class="panel">
+        <h2>Sign in</h2>
+        <div class="row">
+          <input id="email" type="email" value="owner@crustandcrackle.test" />
+          <input id="password" type="password" value="test-password" />
+          <button id="login">Sign in</button>
+        </div>
+        <p class="muted">
+          Seeded users: owner@crustandcrackle.test (owner, bakery A), baker@crustandcrackle.test
+          (staff, bakery A), owner@secondbakery.test (owner, bakery B).
+        </p>
+        <p id="login-error" class="error"></p>
+      </section>
+
+      <div id="workspace" hidden>
+        <section class="panel">
+          <h2>Test actions</h2>
+          <div class="row wrap" id="scenario-buttons"></div>
+          <div class="row wrap">
+            <button id="run-all" class="primary">Run all scenarios</button>
+            <button id="run-probes">Run platform probes</button>
+            <button id="run-realtime">Run realtime test</button>
+            <button id="refresh">Refresh everything</button>
+          </div>
+          <pre id="action-log" class="log"></pre>
+        </section>
+
+        <section class="panel">
+          <h2>Results</h2>
+          <div id="summary" class="summary"></div>
+          <div id="checks"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Waiting on a person</h2>
+          <div id="inbox"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Stored state</h2>
+          <div id="state"></div>
+        </section>
+
+        <section class="panel two-col">
+          <div>
+            <h2>Events</h2>
+            <div id="events" class="stream"></div>
+          </div>
+          <div>
+            <h2>Audit</h2>
+            <div id="audit" class="stream"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Realtime feed (server push)</h2>
+          <div id="rt-feed" class="stream"></div>
+        </section>
+      </div>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
