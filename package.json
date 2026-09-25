@@ -1,0 +1,33 @@
+{
+  "name": "mybake-platform-test",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MyBake Platform Test - a platform acceptance test harness (persistence, tenancy, business rules, realtime, audit).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file-if-exists=.env dist/main.js",
+    "migrate": "tsx --env-file-if-exists=.env src/cli/migrate.ts up",
+    "migrate:status": "tsx --env-file-if-exists=.env src/cli/migrate.ts status",
+    "seed": "tsx --env-file-if-exists=.env src/cli/seed.ts",
+    "db:reset": "tsx --env-file-if-exists=.env src/cli/reset.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --env-file-if-exists=.env --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
