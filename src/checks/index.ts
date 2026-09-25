@@ -700,8 +700,82 @@ async function checkConsignment(client: PoolClient, bakeryId: string): Promise<C
       (openedEvent?.payload?.options ?? []).map((o) => o.code),
     );
 
+    // The consequence of the decision, which must not exist before one is made.
+    const settlement = await one<{
+      resolution_code: string;
+      units_unreturned: number;
+      units_sold: number;
+      units_owed_back: number;
+      units_written_off: number;
+      units_unaccounted: number;
+      revenue_cents: number;
+      bakery_held_units_before: number;
+      bakery_held_units_after: number;
+    }>(
+      'SELECT * FROM consignment_settlements WHERE discrepancy_id = $1',
+      [discrepancy?.id ?? null],
+      client,
+    );
+
+    if (discrepancy?.status === 'OPEN') {
+      c.is(
+        'no operational effect before a human decides',
+        'no settlement row',
+        settlement ? settlement.resolution_code : null,
+        settlement === null,
+      );
+    } else if (discrepancy?.status === 'RESOLVED') {
+      const unreturned = discrepancy.expected_units - discrepancy.actual_units;
+      c.is(
+        'the decision produced a persisted operational effect',
+        'one settlement row',
+        settlement?.resolution_code ?? null,
+        Boolean(settlement),
+      );
+      c.eq('the effect matches the chosen resolution', discrepancy.resolution_code, settlement?.resolution_code ?? null);
+      c.eq('every unreturned unit is accounted for', unreturned, settlement?.units_unreturned ?? null);
+      c.eq(
+        'the accounting buckets balance',
+        unreturned,
+        settlement
+          ? settlement.units_sold +
+            settlement.units_owed_back +
+            settlement.units_written_off +
+            settlement.units_unaccounted
+          : null,
+      );
+      // The codes must stay semantically distinct: only ASSUME_SOLD sells the
+      // units and earns revenue, and only it clears them from bakery-held stock
+      // while recognising money.
+      if (settlement?.resolution_code === 'ASSUME_SOLD') {
+        c.eq('assume-sold moves the units to sold', unreturned, settlement.units_sold);
+        c.is(
+          'assume-sold recognises revenue',
+          'more than zero cents',
+          settlement.revenue_cents,
+          settlement.revenue_cents > 0,
+        );
+        c.eq('assume-sold leaves no bakery-held consignment stock', 0, settlement.bakery_held_units_after);
+      }
+      if (settlement?.resolution_code === 'WRITE_OFF_LOST') {
+        c.eq('write-off moves the units to written off', unreturned, settlement.units_written_off);
+        c.eq('write-off recognises no revenue', 0, settlement.revenue_cents);
+      }
+      if (settlement?.resolution_code === 'BAKERY_MISSED_RETURN') {
+        c.eq('missed return keeps the units owed back', unreturned, settlement.units_owed_back);
+        c.eq('missed return recognises no revenue', 0, settlement.revenue_cents);
+        c.eq('missed return keeps them as bakery stock', unreturned, settlement.bakery_held_units_after);
+      }
+      // Whatever was chosen, the observation itself is untouched.
+      c.eq('delivered quantity not rewritten by the decision', 10, delivery.delivered_units);
+      c.eq('expected return not rewritten by the decision', 2, delivery.expected_return_units);
+      c.eq('actual return not rewritten by the decision', 0, ret?.returned_units ?? null);
+      c.eq('original discrepancy delta not rewritten', -2, discrepancy.delta_units);
+    }
+
     c.note('delivery', delivery);
     c.note('discrepancy', discrepancy);
+    c.note('settlement', settlement);
     c.note('options', openedEvent?.payload?.options ?? []);
   }
 

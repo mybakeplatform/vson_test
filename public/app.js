@@ -111,10 +111,36 @@ function openStream() {
   const sse = new EventSource(url);
   state.sse = sse;
 
-  sse.addEventListener('ready', () => {
+  // `ready` arrives on EVERY open of this socket, including the automatic
+  // reconnects EventSource performs after a drop. The server has re-run
+  // authenticate + requireTenant by the time it is sent, so the tenant context
+  // is already restored. Anything that changed while we were disconnected was
+  // never pushed to us, so the only safe move is to re-read authoritative
+  // state over HTTP rather than assume the feed is complete.
+  sse.addEventListener('ready', (message) => {
+    const wasDisconnected = !state.listening;
     state.listening = true;
     $('rt-indicator').textContent = 'realtime: connected';
     $('rt-indicator').className = 'pill pill-on';
+
+    if (wasDisconnected) {
+      let latestEventId = null;
+      try {
+        latestEventId = JSON.parse(message.data).latestEventId ?? null;
+      } catch {
+        /* the frame is a hint, not state: a missing field changes nothing */
+      }
+      const feed = $('rt-feed');
+      const row = document.createElement('div');
+      row.textContent = latestEventId
+        ? `reconnected at #${latestEventId} -> refetching authoritative state`
+        : 'reconnected -> refetching authoritative state';
+      feed.prepend(row);
+    }
+    // Unconditional: a connect we believed was the first can still follow a
+    // drop we never saw. scheduleRefresh debounces, so the duplicate costs
+    // nothing and the stale-state window closes either way.
+    scheduleRefresh();
   });
 
   sse.addEventListener('change', (message) => {

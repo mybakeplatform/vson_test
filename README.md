@@ -18,7 +18,7 @@ Postgres. Nothing is asserted from explanatory text.
 | 4 | Payment brain: exact match, unresolved overpayment, unmatched payment with suggestions | `src/domain/payments.ts` |
 | 5 | Credit: $30 spent as $12 + $15 + $3, leaving $17 due | `src/domain/credit.ts` |
 | 6 | Bakery-controlled shipping: no date -> Oct 1 -> Oct 2, Oct 1 kept as history | `src/domain/shipping.ts` |
-| 7 | Consignment: 10 out, 2 expected, 0 back, discrepancy left for a person | `src/domain/consignment.ts` |
+| 7 | Consignment: 10 out, 2 expected, 0 back, discrepancy left for a person; the chosen resolution then settles the units to sold / owed back / written off | `src/domain/consignment.ts` |
 | 8 | Historical integrity: old order stays $14, old run stays recipe v1 | `src/domain/catalog.ts` + schema triggers |
 | 9 | Tesla brain: recommends, never applies; accept and reject both recorded | `src/domain/tesla.ts` |
 
@@ -28,7 +28,7 @@ realtime, event history and audit history, each with its own check.
 ## Requirements
 
 - Node.js 20 or newer (developed on 22)
-- PostgreSQL 14 or newer (developed on 16; uses `pgcrypto`, generated columns,
+- PostgreSQL 14 or newer (developed against 16 and 17; uses `pgcrypto`, generated columns,
   partial unique indexes, `LISTEN`/`NOTIFY`)
 
 That is the entire infrastructure list. No queue, no cache, no object store,
@@ -162,6 +162,35 @@ checksum has drifted.
 pg_dump --no-owner --no-privileges --format=custom "$DATABASE_URL" > mybake.dump
 ```
 
+> **Your `pg_dump` must be at least as new as the server.** `pg_dump` refuses to
+> dump a server newer than itself, and the error names both versions:
+>
+> ```
+> pg_dump: error: aborting because of server version mismatch
+> pg_dump: detail: server version: 17.10; pg_dump version: 15.19
+> ```
+>
+> Check the pair before you rely on the command:
+>
+> ```bash
+> pg_dump --version
+> psql "$DATABASE_URL" -tAc 'SHOW server_version'
+> ```
+>
+> If the client is older, install a matching one (`postgresql-client-<major>`
+> from the PGDG repository) or dump from a container that already has it:
+>
+> ```bash
+> docker run --rm postgres:17-alpine \
+>   pg_dump --no-owner --no-privileges --format=custom "$DATABASE_URL" > mybake.dump
+> ```
+>
+> The Vson development workspace currently ships `pg_dump` 15 against a
+> PostgreSQL 17 server, so **the command above does not run from inside that
+> workspace** - use one of the two options here. This is a client-tooling
+> limitation, not a property of the database: the server is ordinary
+> PostgreSQL and dumps normally from any machine with a current client.
+
 **Restore**
 
 ```bash
@@ -201,4 +230,4 @@ tests/             unit + end-to-end acceptance suite
 ```
 
 Further reading: [ARCHITECTURE.md](ARCHITECTURE.md) for how the rules are
-enforced, [FIRE_DRILL.md](FIRE_DRILL.md) for the portability assessment.
+enforced.

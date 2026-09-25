@@ -164,7 +164,7 @@ readRouter.get(
   tenantOnly,
   asyncHandler(async (req, res) => {
     const b = req.tenant!.bakeryId;
-    const [exceptions, discrepancies, recommendations, impacts] = await Promise.all([
+    const [exceptions, discrepancies, recommendations, impacts, settlements] = await Promise.all([
       query(
         `SELECT e.*, p.amount_cents AS payment_amount_cents, p.order_id AS payment_order_id,
                 (SELECT json_agg(json_build_object('id', s.id, 'orderId', s.order_id, 'orderCode', o.code,
@@ -185,8 +185,24 @@ readRouter.get(
           WHERE i.bakery_id = $1 AND i.resolution = 'AWAITING_HUMAN' ORDER BY i.created_at DESC`,
         [b],
       ),
+      // What the human decisions actually did to stock and money.
+      query(
+        `SELECT s.*, c.name AS partner_name, p.sku
+           FROM consignment_settlements s
+           JOIN consignment_deliveries d ON d.id = s.delivery_id
+           JOIN customers c ON c.id = d.partner_id
+           JOIN products p ON p.id = s.product_id
+          WHERE s.bakery_id = $1 ORDER BY s.created_at DESC, s.id`,
+        [b],
+      ),
     ]);
-    res.json({ paymentExceptions: exceptions, discrepancies, recommendations, productionImpacts: impacts });
+    res.json({
+      paymentExceptions: exceptions,
+      discrepancies,
+      recommendations,
+      productionImpacts: impacts,
+      consignmentSettlements: settlements,
+    });
   }),
 );
 

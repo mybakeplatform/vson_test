@@ -120,6 +120,29 @@ Rescheduling never edits the old row. The October 1 assignment becomes
 exactly one `ACTIVE` assignment per order. The capacity for the old day is
 released and the new day is reserved in the same transaction.
 
+## Consignment: observation and consequence are separate rows
+
+`consignment_discrepancies` holds what was *observed* - expected back, actually
+back, the delta - and who decided. Those numbers are never rewritten.
+
+What the decision *meant* goes in `consignment_settlements`, a separate
+append-only row written only when a person chooses. That separation is what
+lets a resolution carry real weight without touching the evidence it was based
+on. The four codes are not interchangeable:
+
+| Resolution | Units land in | Revenue | Still bakery-held? |
+|---|---|---|---|
+| `ASSUME_SOLD` | `units_sold` | yes, at the price version in force | no |
+| `BAKERY_MISSED_RETURN` | `units_owed_back` | no | yes |
+| `WRITE_OFF_LOST` | `units_written_off` | no | no |
+| `OTHER` | `units_unaccounted` | no | yes |
+
+A database constraint makes the accounting add up -
+`units_sold + units_owed_back + units_written_off + units_unaccounted =
+units_unreturned` - so a settlement cannot silently lose a loaf. Revenue is
+priced with a snapshot of `product_prices`, the same rule `order_lines`
+follows, so a later price change cannot move what was already settled.
+
 ## Recommendations
 
 `evaluateSupply` writes a `recommendations` row with `status = 'PENDING'` and
@@ -139,6 +162,15 @@ INSERT INTO events  ->  trigger pg_notify('mybake_events', {ids})
 The SSE frame carries an event id, type and entity id. It is not the data and
 it is not the database. The console never renders from a push payload; it uses
 it as a signal to re-read.
+
+A socket that was down received nothing, so reconnecting is treated as
+"assume stale". The server sends `ready` on every open - including the
+automatic reconnects `EventSource` performs - carrying the tenant's current
+high-water event id, and the client answers it by refetching authoritative
+state over HTTP. That closes the gap without replaying anything: the feed is
+never the source of truth, so it does not need to be complete, only current.
+Tenant context is already restored when `ready` is sent, because the stream
+endpoint runs `authenticate` and `requireTenant` before it writes a byte.
 
 Fan-out filters by `bakery_id`, so a notice for one tenant is never written to
 another tenant's socket. The realtime check proves both halves: a receipt
