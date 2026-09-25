@@ -29,7 +29,20 @@ realtimeRouter.get(
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
-    res.write(`event: ready\ndata: ${JSON.stringify({ bakeryId: t.bakeryId })}\n\n`);
+    // `ready` is sent on every open, including EventSource's automatic
+    // reconnects. It carries the tenant's current high-water event id so the
+    // client can say what it reconnected at - it is still a pointer, not
+    // state, and the client answers it by re-reading over HTTP.
+    const latest = await one<{ id: number }>(
+      'SELECT max(id)::bigint AS id FROM events WHERE bakery_id = $1',
+      [t.bakeryId],
+    );
+    res.write(
+      `event: ready\ndata: ${JSON.stringify({
+        bakeryId: t.bakeryId,
+        latestEventId: latest?.id ?? null,
+      })}\n\n`,
+    );
 
     const unsubscribe = subscribe(t.bakeryId, t.userId, res);
     req.on('close', () => {
